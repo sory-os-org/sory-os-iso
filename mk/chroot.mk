@@ -54,11 +54,30 @@ $(BUILD)/chroot: $(BUILD)/debootstrap
 	# Copy GPG public key for Pop staging repositories
 	gpg --batch --yes --export "204DD8AEC33A7AFF" | sudo tee "$@.partial/iso/pop-keyring-2017-archive.gpg" > /dev/null
 
+	# Download SoryOS pool: catalogue Pages + binaires Release (never build .deb locally)
+	if [ -n "${SORYOS_PAGES_BASE_URL}" ] || [ -n "${SORYOS_RELEASE_INDEX_URL}" ]; then \
+		mkdir -p "$(SORYOS_APT_ROOT)"; \
+		SORYOS_PAGES_BASE_URL="$(SORYOS_PAGES_BASE_URL)" \
+		SORYOS_RELEASE_INDEX_URL="$(SORYOS_RELEASE_INDEX_URL)" \
+			bash "scripts/soryos-release-pool.sh" "$(SORYOS_APT_ROOT)"; \
+		if ! ls "$(SORYOS_APT_ROOT)/pool/stable/"*.deb >/dev/null 2>&1; then \
+			echo "SoryOS ISO build requires pre-built .deb from GitHub Release (CI), not local compilation" >&2; \
+			echo "Publish a Release first: sory-os-apt/.github/workflows/build-deb-release.yml" >&2; \
+			exit 1; \
+		fi; \
+		if [ -f "$(SORYOS_APT_ROOT)/keyrings/soryos-archive-keyring.gpg" ]; then \
+			sudo cp "$(SORYOS_APT_ROOT)/keyrings/soryos-archive-keyring.gpg" \
+				"$@.partial/iso/soryos-archive-keyring.gpg"; \
+		fi; \
+	fi
+
 	# Clean APT sources
 	sudo truncate --size=0 "$@.partial/etc/apt/sources.list"
 
 	# Temporarily set apt preferences
-	sudo cp "data/apt-preferences" "$@.partial/etc/apt/preferences.d/pop-iso"
+	APT_PREFS="$(APT_PREFERENCES)"
+	if [ -z "$$APT_PREFS" ]; then APT_PREFS="data/apt-preferences"; fi
+	sudo cp "$$APT_PREFS" "$@.partial/etc/apt/preferences.d/pop-iso"
 
 	# Copy kernelstub configuration
 	sudo mkdir "$@.partial/etc/kernelstub"
@@ -79,12 +98,13 @@ $(BUILD)/chroot: $(BUILD)/debootstrap
 
 	# Add release URIs
 	if [ -n "${RELEASE_URI}" ]; then \
+		RELEASE_SUITES="$${RELEASE_SUITE:-$(UBUNTU_CODE)}"; \
 		sudo $(CHROOT) "$@.partial" /bin/bash -e -c \
 			"FILENAME=\"/etc/apt/sources.list.d/${DISTRO_CODE}-release.sources\" \
 			NAME=\"${DISTRO_NAME} Release Sources\" \
 			TYPES=\"deb deb-src\" \
 			URIS=\"${RELEASE_URI}\" \
-			SUITES=\"${UBUNTU_CODE}\" \
+			SUITES=\"$$RELEASE_SUITES\" \
 			COMPONENTS=\"main\" \
 			SIGNED_BY=\"${RELEASE_KEY}\" \
 			/iso/repos.sh"; \

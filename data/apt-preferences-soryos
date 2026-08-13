@@ -1,0 +1,11 @@
+Package: *
+Pin: release o=SoryOS
+Pin-Priority: 1001
+
+Package: *
+Pin: release o=Ubuntu
+Pin-Priority: 500
+
+Package: *
+Pin: release o=Debian
+Pin-Priority: 100

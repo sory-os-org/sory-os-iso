@@ -18,8 +18,9 @@ DEB822:=1
 
 SORYOS_APT_REPO?=sory-os-org/sory-os-apt
 SORYOS_PAGES_BASE_URL?=https://sory-os-org.github.io/sory-os-apt
-SORYOS_RELEASE_TAG?=soryos-deb-2026.08.07-desktop-full
-SORYOS_RELEASE_INDEX_URL?=$(SORYOS_PAGES_BASE_URL)/index.json
+SORYOS_RELEASE_TAG?=soryos-deb-test-2026.08.13
+# Pages catalogue (optional). Fallback: index on the GitHub Release.
+SORYOS_RELEASE_INDEX_URL?=https://github.com/sory-os-org/sory-os-apt/releases/download/$(SORYOS_RELEASE_TAG)/index.json
 
 # Pendant le build ISO : pool local construit depuis Pages (catalogue) + Release (.deb)
 SORYOS_APT_ROOT=$(BUILD)/soryos-apt

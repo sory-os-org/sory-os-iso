@@ -18,4 +18,8 @@ echo "Types: ${TYPES}" >> "${FILENAME}"
 echo "URIs: ${URIS}" >> "${FILENAME}"
 echo "Suites: ${SUITES}" >> "${FILENAME}"
 echo "Components: ${COMPONENTS}" >> "${FILENAME}"
-echo "Signed-By: ${SIGNED_BY}" >> "${FILENAME}"
+if [ -n "${TRUSTED}" ]; then
+	echo "Trusted: yes" >> "${FILENAME}"
+elif [ -n "${SIGNED_BY}" ]; then
+	echo "Signed-By: ${SIGNED_BY}" >> "${FILENAME}"
+fi

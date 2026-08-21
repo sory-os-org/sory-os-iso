@@ -55,10 +55,14 @@ $(BUILD)/iso_pool.tag: $(BUILD)/pool $(BUILD)/iso_create.tag
 	sudo cp -r "$</pool" "$(BUILD)/iso/pool"
 	sudo chown -R "$(USER):$(USER)" "$(BUILD)/iso/pool"
 
-	# Fix pool paths
-	./scripts/pool.sh "$(BUILD)/iso/pool/"*
+	# Fix pool paths (skip when the ISO pool is empty — SoryOS has no MAIN_POOL yet)
+	set -- "$(BUILD)/iso/pool"/*; \
+	if [ -e "$$1" ]; then \
+		./scripts/pool.sh "$$@"; \
+	fi
 
 	# Update pool package lists
+	if [ -n "$$(find "$(BUILD)/iso/pool" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)" ]; then \
 	cd "$(BUILD)/iso" && \
 	mkdir -p "dists/$(UBUNTU_CODE)" && \
 	for pool in $$(ls -1 pool); do \
@@ -82,7 +86,8 @@ $(BUILD)/iso_pool.tag: $(BUILD)/pool $(BUILD)/iso_create.tag
 	gpg --batch --yes --digest-algo sha512 --sign --detach-sign --armor --local-user "$(GPG_NAME)" -o "dists/$(UBUNTU_CODE)/Release.gpg" "dists/$(UBUNTU_CODE)/Release" && \
 	cd "dists" && \
 	ln -s "$(UBUNTU_CODE)" stable && \
-	ln -s "$(UBUNTU_CODE)" unstable
+	ln -s "$(UBUNTU_CODE)" unstable; \
+	fi
 
 	touch "$@"
 

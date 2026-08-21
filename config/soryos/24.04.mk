@@ -1,10 +1,14 @@
 DISTRO_NAME=SoryOS
 DISTRO_CODE=soryos
 
+# Base Ubuntu packages (noble) — use archive.ubuntu.com (apt.pop-os.org often unavailable)
+UBUNTU_MIRROR:=http://archive.ubuntu.com/ubuntu
+
 APT_PREFERENCES=data/apt-preferences-soryos
 
-# Show splash screen
-DISTRO_PARAMS+=quiet splash
+# Live ISO kernel cmdline (grub/isolinux). No `splash` until a plymouth theme is
+# packaged — otherwise cosmic-greeter waits forever on plymouth-quit-wait (black screen).
+DISTRO_PARAMS+=noplymouth
 
 # DEB822 format system repositories
 DEB822:=1
@@ -24,8 +28,12 @@ SORYOS_RELEASE_INDEX_URL?=https://github.com/sory-os-org/sory-os-apt/releases/do
 
 # Pendant le build ISO : pool local construit depuis Pages (catalogue) + Release (.deb)
 SORYOS_APT_ROOT=$(BUILD)/soryos-apt
-RELEASE_URI=file:$(SORYOS_APT_ROOT)
+# Monté dans le chroot via bind (voir mk/chroot.mk) — chemin visible par apt dans le chroot
+SORYOS_APT_CHROOT_MOUNT=/mnt/soryos-apt
+RELEASE_URI=file:$(SORYOS_APT_CHROOT_MOUNT)
 RELEASE_SUITE=stable
+# Pool local file:// : métadonnées régénérées sans signature (index vérifié en amont)
+RELEASE_TRUSTED=1
 RELEASE_KEY=/iso/soryos-archive-keyring.gpg
 
 # Sur le système installé : métadonnées APT depuis Pages (mises à jour via index)
@@ -46,12 +54,14 @@ POST_DISTRO_PKGS=\
 LIVE_PKGS=\
 	casper \
 	cosmic-initial-setup-casper \
-	distinst \
 	expect \
 	gparted
+# distinst: installateur graphique Pop — à réactiver quand le .deb sera
+# publié sur la Release SoryOS (sources github.com/pop-os/distinst via CI).
 
 RM_PKGS=\
-	snapd
+	snapd \
+	unattended-upgrades
 
 MAIN_POOL=
 RESTRICTED_POOL=

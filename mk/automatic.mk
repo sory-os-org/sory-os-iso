@@ -1,11 +1,5 @@
 BUILD=build/$(DISTRO_CODE)/$(DISTRO_VERSION)/$(DISTRO_ARCH)
 
-SORYOS_APT_ROOT?=
-SORYOS_PAGES_BASE_URL?=
-SORYOS_RELEASE_INDEX_URL?=
-APT_PREFERENCES?=data/apt-preferences
-RELEASE_SUITE?=
-
 ISO=$(BUILD)/$(ISO_NAME).iso
 TAR=$(BUILD)/$(ISO_NAME).tar
 USB=$(BUILD)/$(ISO_NAME).img
@@ -28,19 +22,14 @@ SED=\
 
 CHROOT=env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin chroot
 
-XORRISO=$(shell command -v xorriso 2> /dev/null)
-ZSYNC=$(shell command -v zsync 2> /dev/null)
-SQUASHFS=$(shell command -v mksquashfs 2> /dev/null)
+# Avoid redirecting to /dev/null here: a broken /dev/null breaks $(shell ...) on some hosts.
+XORRISO := $(shell command -v xorriso)
+ZSYNC := $(shell command -v zsync)
+SQUASHFS := $(shell command -v mksquashfs)
 
-# Ensure that `zsync` is installed already
-ifeq (,$(ZSYNC))
-$(error zsync not found! Run deps.sh first.)
-endif
-# Ensure that `xorriso` is installed already
 ifeq (,$(XORRISO))
 $(error xorriso not found! Run deps.sh first.)
 endif
-# Ensure that `squashfs` is installed already
 ifeq (,$(SQUASHFS))
 $(error squashfs-tools not found! Run deps.sh first.)
 endif

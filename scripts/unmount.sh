@@ -13,6 +13,8 @@ if [ -d "$CHROOT" ]
 then
     if [ -n "$(mount | grep "$CHROOT")" ]
     then
+        sudo umount "$CHROOT/mnt/soryos-apt" 2>/dev/null || sudo umount -lf "$CHROOT/mnt/soryos-apt" 2>/dev/null || true
+        sudo umount "$CHROOT/dev/pts" || sudo umount -lf "$CHROOT/dev/pts" || true
         sudo umount "$CHROOT/dev" || sudo umount -lf "$CHROOT/dev" || true
         sudo umount "$CHROOT/run" || sudo umount -lf "$CHROOT/run" || true
         sudo umount "$CHROOT/proc" || sudo umount -lf "$CHROOT/proc" || true

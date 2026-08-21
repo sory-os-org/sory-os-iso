@@ -36,7 +36,11 @@ tar: $(TAR)
 usb: $(USB)
 
 # Complete target - build zsync file, SHA256SUMS, and GPG signature
-all: $(ISO) $(ISO).zsync $(BUILD)/SHA256SUMS $(BUILD)/SHA256SUMS.gpg
+all: check-zsync $(ISO) $(ISO).zsync $(BUILD)/SHA256SUMS $(BUILD)/SHA256SUMS.gpg
+
+.PHONY: check-zsync
+check-zsync:
+	@command -v zsync || { echo "zsync not found! Run deps.sh first."; exit 1; }
 
 serve: all
 	cd $(BUILD) && python3 -m http.server 8909

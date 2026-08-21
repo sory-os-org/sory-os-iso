@@ -13,14 +13,13 @@ then
     ln -sf /etc/machine-id /var/lib/dbus/machine-id
 fi
 
-if [ ! -f /run/systemd/resolve/stub-resolv.conf ]
-then
-    mkdir -p /run/systemd/resolve
-    echo "nameserver 1.1.1.1" > /run/systemd/resolve/stub-resolv.conf
+# DNS: keep host resolv.conf copied by scripts/mount.sh when possible.
+if ! grep -q '^nameserver' /etc/resolv.conf 2>/dev/null; then
+    cat > /etc/resolv.conf <<'EOF'
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+EOF
 fi
-
-# Correctly specify resolv.conf
-ln -sf ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 
 # Enable i386 on amd64 installs so that steam is installable out of the box
 if [ "$(dpkg --print-architecture)" == "amd64" ]

@@ -2,6 +2,10 @@
 
 set -e
 
+if [ $# -eq 0 ]; then
+	exit 0
+fi
+
 for pool in "$@"
 do
 	pushd "${pool}"

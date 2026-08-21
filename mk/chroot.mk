@@ -60,6 +60,8 @@ $(BUILD)/chroot: $(BUILD)/debootstrap
 		SORYOS_PAGES_BASE_URL="$(SORYOS_PAGES_BASE_URL)" \
 		SORYOS_RELEASE_INDEX_URL="$(SORYOS_RELEASE_INDEX_URL)" \
 			bash "scripts/soryos-release-pool.sh" "$(SORYOS_APT_ROOT)"; \
+		bash "scripts/soryos-ensure-pool-extras.sh" "$(SORYOS_APT_ROOT)"; \
+		bash "scripts/soryos-refresh-pool-metadata.sh" "$(SORYOS_APT_ROOT)"; \
 		if ! ls "$(SORYOS_APT_ROOT)/pool/stable/"*.deb >/dev/null 2>&1; then \
 			echo "SoryOS ISO build requires pre-built .deb from GitHub Release (CI), not local compilation" >&2; \
 			echo "Publish a Release first: sory-os-apt/.github/workflows/build-deb-release.yml" >&2; \
@@ -69,15 +71,17 @@ $(BUILD)/chroot: $(BUILD)/debootstrap
 			sudo cp "$(SORYOS_APT_ROOT)/keyrings/soryos-archive-keyring.gpg" \
 				"$@.partial/iso/soryos-archive-keyring.gpg"; \
 		fi; \
+		if [ -n "$(SORYOS_APT_CHROOT_MOUNT)" ] && [ -d "$(SORYOS_APT_ROOT)" ]; then \
+			sudo mkdir -p "$@.partial$(SORYOS_APT_CHROOT_MOUNT)"; \
+			sudo mount --bind "$(CURDIR)/$(SORYOS_APT_ROOT)" "$@.partial$(SORYOS_APT_CHROOT_MOUNT)"; \
+		fi; \
 	fi
 
 	# Clean APT sources
 	sudo truncate --size=0 "$@.partial/etc/apt/sources.list"
 
 	# Temporarily set apt preferences
-	APT_PREFS="$(APT_PREFERENCES)"
-	if [ -z "$$APT_PREFS" ]; then APT_PREFS="data/apt-preferences"; fi
-	sudo cp "$$APT_PREFS" "$@.partial/etc/apt/preferences.d/pop-iso"
+	sudo cp "$(APT_PREFERENCES)" "$@.partial/etc/apt/preferences.d/pop-iso"
 
 	# Copy kernelstub configuration
 	sudo mkdir "$@.partial/etc/kernelstub"
@@ -98,14 +102,14 @@ $(BUILD)/chroot: $(BUILD)/debootstrap
 
 	# Add release URIs
 	if [ -n "${RELEASE_URI}" ]; then \
-		RELEASE_SUITES="$${RELEASE_SUITE:-$(UBUNTU_CODE)}"; \
 		sudo $(CHROOT) "$@.partial" /bin/bash -e -c \
 			"FILENAME=\"/etc/apt/sources.list.d/${DISTRO_CODE}-release.sources\" \
 			NAME=\"${DISTRO_NAME} Release Sources\" \
-			TYPES=\"deb deb-src\" \
+			TYPES=\"deb\" \
 			URIS=\"${RELEASE_URI}\" \
-			SUITES=\"$$RELEASE_SUITES\" \
+			SUITES=\"$(or $(RELEASE_SUITE),$(UBUNTU_CODE))\" \
 			COMPONENTS=\"main\" \
+			TRUSTED=\"${RELEASE_TRUSTED}\" \
 			SIGNED_BY=\"${RELEASE_KEY}\" \
 			/iso/repos.sh"; \
 	fi
@@ -152,6 +156,9 @@ $(BUILD)/chroot: $(BUILD)/debootstrap
 	sudo rmdir --ignore-fail-on-non-empty "$@.partial/lib/modules/$(shell uname -r)"
 
 	# Unmount chroot
+	if [ -n "$(SORYOS_APT_CHROOT_MOUNT)" ] && mountpoint -q "$@.partial$(SORYOS_APT_CHROOT_MOUNT)" 2>/dev/null; then \
+		sudo umount "$@.partial$(SORYOS_APT_CHROOT_MOUNT)"; \
+	fi
 	"scripts/unmount.sh" "$@.partial"
 
 	sudo rm -rf "$@.partial"/root/.launchpadlib
@@ -188,6 +195,12 @@ $(BUILD)/live: $(BUILD)/chroot
 	# Mount chroot
 	"scripts/mount.sh" "$@.partial"
 
+	# SoryOS pool for live-only packages (cosmic-initial-setup-casper, distinst, …)
+	if [ -n "$(SORYOS_APT_CHROOT_MOUNT)" ] && [ -d "$(SORYOS_APT_ROOT)" ]; then \
+		sudo mkdir -p "$@.partial$(SORYOS_APT_CHROOT_MOUNT)"; \
+		sudo mount --bind "$(CURDIR)/$(SORYOS_APT_ROOT)" "$@.partial$(SORYOS_APT_CHROOT_MOUNT)"; \
+	fi
+
 	# Copy GPG public key for APT CDROM
 	gpg --batch --yes --export "$(GPG_NAME)" | sudo tee "$@.partial/iso/apt-cdrom.gpg" > /dev/null
 
@@ -212,6 +225,25 @@ $(BUILD)/live: $(BUILD)/chroot
 		sudo rm -f "$@.partial/usr/share/initramfs-tools/scripts/casper-bottom/01integrity_check"; \
 	fi
 
+	# SoryOS: no dists/ on the ISO — skip apt-cdrom, fix chown/ln/grep casper hooks
+	if [ -d "$@.partial/usr/share/initramfs-tools/scripts/casper-bottom" ]; then \
+		bash "scripts/soryos-patch-casper-bottom.sh" \
+			"$@.partial/usr/share/initramfs-tools/scripts/casper-bottom"; \
+		sudo $(CHROOT) "$@.partial" /usr/sbin/update-initramfs -u -k all; \
+	fi
+
+	# SoryOS live: cosmic-greeter waits on plymouth-quit-wait, but we ship no Plymouth
+	# theme — with `splash` on the kernel cmdline the greeter never starts (black screen).
+	for svc in \
+		"$@.partial/usr/lib/systemd/system/cosmic-greeter.service" \
+		"$@.partial/lib/systemd/system/cosmic-greeter.service" \
+		"$@.partial/usr/lib/systemd/system/greetd.service" \
+		"$@.partial/lib/systemd/system/greetd.service"; do \
+		if [ -f "$$svc" ]; then \
+			sudo sed -i 's/ plymouth-quit-wait\.service//g' "$$svc"; \
+		fi; \
+	done
+
 	# Make casper script for initial setup set the version
 	if [ -n "$(GNOME_INITIAL_SETUP_STAMP)" ]; then \
 		sudo sed -i \
@@ -227,9 +259,9 @@ $(BUILD)/live: $(BUILD)/chroot
 		sudo $(CHROOT) "$@.partial" /usr/bin/appstreamcli refresh-cache --force; \
 	fi
 
-	# Update fwupd cache
+	# Update fwupd cache (best-effort: chroot may be offline during ISO build)
 	if [ -e "$@.partial/usr/bin/fwupdtool" ]; then \
-		sudo $(CHROOT) "$@.partial" /usr/bin/fwupdtool refresh --force; \
+		sudo $(CHROOT) "$@.partial" /usr/bin/fwupdtool refresh --force || true; \
 	fi
 
 	# Run console-setup script
@@ -242,6 +274,9 @@ $(BUILD)/live: $(BUILD)/chroot
 	fi
 
 	# Unmount chroot
+	if [ -n "$(SORYOS_APT_CHROOT_MOUNT)" ] && mountpoint -q "$@.partial$(SORYOS_APT_CHROOT_MOUNT)" 2>/dev/null; then \
+		sudo umount "$@.partial$(SORYOS_APT_CHROOT_MOUNT)"; \
+	fi
 	"scripts/unmount.sh" "$@.partial"
 
 	sudo rm -rf "$@.partial"/root/.launchpadlib
@@ -255,6 +290,11 @@ $(BUILD)/live: $(BUILD)/chroot
 $(BUILD)/live.tag: $(BUILD)/live
 	sudo $(CHROOT) "$<" /bin/bash -e -c "dpkg-query -W --showformat='\$${Package}\t\$${Version}\n'" > "$@"
 
+ifeq ($(strip $(MAIN_POOL) $(RESTRICTED_POOL) $(POOL_PKGS)),)
+$(BUILD)/pool: $(BUILD)/chroot
+	mkdir -p "$@/pool"
+	touch "$@"
+else
 $(BUILD)/pool: $(BUILD)/chroot
 	# Unmount chroot if mounted
 	scripts/unmount.sh "$@.partial"
@@ -299,3 +339,5 @@ $(BUILD)/pool: $(BUILD)/chroot
 
 	sudo touch "$@.partial"
 	sudo mv "$@.partial" "$@"
+
+endif

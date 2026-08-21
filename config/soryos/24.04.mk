@@ -56,8 +56,7 @@ LIVE_PKGS=\
 	cosmic-initial-setup-casper \
 	expect \
 	gparted
-# distinst: installateur graphique Pop — à réactiver quand le .deb sera
-# publié sur la Release SoryOS (sources github.com/pop-os/distinst via CI).
+# distinst: installateur graphique — sources sur sory-os-org/distinst via CI.
 
 RM_PKGS=\
 	snapd \

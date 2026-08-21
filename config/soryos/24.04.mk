@@ -54,9 +54,9 @@ POST_DISTRO_PKGS=\
 LIVE_PKGS=\
 	casper \
 	cosmic-initial-setup-casper \
+	distinst \
 	expect \
 	gparted
-# distinst: installateur graphique — sources sur sory-os-org/distinst via CI.
 
 RM_PKGS=\
 	snapd \
